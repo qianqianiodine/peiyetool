@@ -1,0 +1,449 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#f7f9fb" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#181c20" media="(prefers-color-scheme: dark)">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="配液计算器">
+<title>配液计算器</title>
+<link rel="manifest" href="manifest.json">
+<link rel="icon" href="icons/icon-192.png">
+<link rel="apple-touch-icon" href="icons/icon-192.png">
+<link rel="stylesheet" href="css/app.css">
+</head>
+<body>
+
+<header class="topbar">
+  <button class="back" id="btnBack" hidden aria-label="返回">‹</button>
+  <h1 id="topTitle">配液计算器</h1>
+</header>
+
+<main id="main">
+
+  <!-- ══ 首页 ══ -->
+  <section class="view" id="view-home">
+    <div class="modgrid">
+      <button class="modcard" data-go="quick">
+        <svg class="modicon" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+             stroke-width="1.6" stroke-linecap="round" aria-hidden="true">
+          <path d="M7 3h10M9 3v13a3 3 0 0 0 6 0V3M9 10h6"/>
+        </svg>
+        <span class="modname">快速配液</span>
+        <span class="moddesc">称多少克，一查就有</span>
+      </button>
+      <button class="modcard" data-go="ph">
+        <svg class="modicon" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+             stroke-width="1.6" stroke-linecap="round" aria-hidden="true">
+          <path d="M10 4.5a2 2 0 1 1 4 0v9.6a4 4 0 1 1-4 0z"/><path d="M12 9v7"/>
+        </svg>
+        <span class="modname">缓冲体系 pH</span>
+        <span class="moddesc">温度换算 · 多质子酸配比</span>
+      </button>
+      <button class="modcard" data-go="system">
+        <svg class="modicon" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+             stroke-width="1.6" aria-hidden="true">
+          <circle cx="8" cy="8" r="2.6"/><circle cx="16" cy="8" r="2.6"/>
+          <circle cx="8" cy="16" r="2.6"/><circle cx="16" cy="16" r="2.6"/>
+        </svg>
+        <span class="modname">体系配置</span>
+        <span class="moddesc">多组分配方一次算清</span>
+      </button>
+      <button class="modcard" data-go="dilution">
+        <svg class="modicon" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+             stroke-width="1.6" stroke-linejoin="round" aria-hidden="true">
+          <path d="M12 3.5s6 6.6 6 10.4a6 6 0 0 1-12 0c0-3.8 6-10.4 6-10.4z"/>
+        </svg>
+        <span class="modname">母液稀释</span>
+        <span class="moddesc">C₁V₁ = C₂V₂</span>
+      </button>
+    </div>
+  </section>
+
+  <!-- ══ 模块一：快速配液 ══ -->
+  <section class="view" id="view-quick" hidden>
+    <div class="card">
+      <div class="cardhead">
+        <span class="lbl">配液方式</span>
+        <div class="seg mini" id="q-mode">
+          <button type="button" data-v="single" class="on">单个</button>
+          <button type="button" data-v="batch">批量</button>
+        </div>
+      </div>
+      <label class="lbl" for="q-name">化合物名称或 CAS 号</label>
+      <input id="q-name" class="in" type="text" autocomplete="off" autocapitalize="off"
+             spellcheck="false" placeholder="如 glucose、葡萄糖 或 50-99-7">
+      <p class="hint">名称查不到时，请尝试 CAS 号</p>
+
+      <div class="row2">
+        <div>
+          <label class="lbl" for="q-conc">目标浓度</label>
+          <div class="inrow">
+            <input id="q-conc" class="in" type="text" inputmode="decimal" value="1">
+            <select id="q-concu" class="sel"></select>
+          </div>
+        </div>
+        <div>
+          <label class="lbl" for="q-vol">目标体积</label>
+          <div class="inrow">
+            <input id="q-vol" class="in" type="text" inputmode="decimal" value="50">
+            <select id="q-volu" class="sel"></select>
+          </div>
+        </div>
+      </div>
+
+      <button class="btn primary" id="q-calc">计算</button>
+    </div>
+    <!-- 「要你回个话」的卡（查不到要手填分子量 / 选哪种形式 / 选哪一瓶）都落在这里：
+         紧贴上面的输入卡片，输完抬眼就在。算完的明细卡在下面的 #q-out ——
+         批量模式下清单会把 #q-out 顶到屏幕外，所以"必须被看到"的东西不能放那儿。 -->
+    <div id="q-ask"></div>
+    <div id="q-batch" class="batch"></div>
+    <div id="q-out"></div>
+  </section>
+
+  <!-- ══ 模块二：缓冲体系 pH ══ -->
+  <section class="view" id="view-ph" hidden>
+    <div class="tabs" role="tablist">
+      <button class="tab on" data-tab="temp" role="tab" aria-selected="true">温度换算</button>
+      <button class="tab" data-tab="poly" role="tab" aria-selected="false">多质子酸配比</button>
+    </div>
+
+    <!-- 子 Tab 1：温度换算 -->
+    <div id="pane-temp">
+      <div class="card">
+        <label class="lbl" for="t-buf">缓冲体系</label>
+        <select id="t-buf" class="sel wide"></select>
+        <p class="hint" id="t-range"></p>
+
+        <div class="row3">
+          <div>
+            <label class="lbl" for="t-ph">已知 pH</label>
+            <input id="t-ph" class="in" type="text" inputmode="decimal" value="7.4">
+          </div>
+          <div>
+            <label class="lbl" for="t-t1">已知温度</label>
+            <input id="t-t1" class="in" type="text" inputmode="decimal" value="25">
+          </div>
+          <div>
+            <label class="lbl" for="t-t2">目标温度</label>
+            <input id="t-t2" class="in" type="text" inputmode="decimal" value="4">
+          </div>
+        </div>
+        <button class="btn primary" id="t-calc">换算</button>
+      </div>
+      <div id="t-out"></div>
+    </div>
+
+    <!-- 子 Tab 2：多质子酸配比 -->
+    <div id="pane-poly" hidden>
+      <div class="card">
+        <label class="lbl" for="p-sys">体系</label>
+        <select id="p-sys" class="sel wide"></select>
+
+        <div class="row2">
+          <div>
+            <label class="lbl">酸形式</label>
+            <div class="fixed" id="p-acidname">—</div>
+            <select id="p-acidform" class="sel wide"></select>
+          </div>
+          <div>
+            <label class="lbl">碱形式</label>
+            <div class="fixed" id="p-basename">—</div>
+            <select id="p-baseform" class="sel wide"></select>
+          </div>
+        </div>
+
+        <div class="row2">
+          <div>
+            <label class="lbl" for="p-ph">目标 pH</label>
+            <input id="p-ph" class="in" type="text" inputmode="decimal" value="7.2">
+          </div>
+          <div>
+            <label class="lbl" for="p-temp">温度 (°C)</label>
+            <input id="p-temp" class="in" type="text" inputmode="decimal" value="25">
+          </div>
+        </div>
+        <div class="row2">
+          <div>
+            <label class="lbl" for="p-conc">总浓度</label>
+            <input id="p-conc" class="in" type="text" inputmode="decimal" value="1">
+          </div>
+          <div>
+            <label class="lbl" for="p-vol">最终体积</label>
+            <div class="inrow">
+              <input id="p-vol" class="in" type="text" inputmode="decimal" value="8">
+              <select id="p-volu" class="sel"></select>
+            </div>
+          </div>
+        </div>
+        <button class="btn primary" id="p-calc">计算配比</button>
+      </div>
+      <div id="p-out"></div>
+    </div>
+  </section>
+
+  <!-- ══ 模块三：体系配置 ══ -->
+  <section class="view" id="view-system" hidden>
+    <div class="card">
+      <label class="lbl" for="s-vol">最终体积</label>
+      <div class="inrow">
+        <input id="s-vol" class="in" type="text" inputmode="decimal" value="500">
+        <select id="s-volu" class="sel"></select>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="cardhead">
+        <span class="lbl">组分</span>
+        <button class="btn tiny" id="s-add">+ 添加组分</button>
+      </div>
+      <div id="s-list"></div>
+    </div>
+
+    <details class="card quiet">
+      <summary class="lbl">常用组分快捷添加</summary>
+      <div id="s-quick"></div>
+    </details>
+
+    <button class="btn primary" id="s-calc">计算配方</button>
+    <div id="s-out"></div>
+  </section>
+
+  <!-- ══ 模块四：母液稀释 ══ -->
+  <section class="view" id="view-dilution" hidden>
+    <div class="card">
+      <div class="cardhead">
+        <span class="lbl">稀释方式</span>
+        <div class="seg mini" id="d-mode">
+          <button type="button" data-v="single" class="on">单个</button>
+          <button type="button" data-v="batch">批量</button>
+        </div>
+      </div>
+      <label class="lbl" for="d-name">组分名称（可选）</label>
+      <input id="d-name" class="in" type="text" placeholder="如 Tris">
+
+      <div class="row2">
+        <div>
+          <label class="lbl" for="d-c1">母液浓度</label>
+          <div class="inrow">
+            <input id="d-c1" class="in" type="text" inputmode="decimal" value="1">
+            <select id="d-c1u" class="sel"></select>
+          </div>
+        </div>
+        <div>
+          <label class="lbl" for="d-c2">目标浓度</label>
+          <div class="inrow">
+            <input id="d-c2" class="in" type="text" inputmode="decimal" value="10">
+            <select id="d-c2u" class="sel"></select>
+          </div>
+        </div>
+      </div>
+
+      <label class="lbl" for="d-v2">目标体积</label>
+      <div class="inrow">
+        <input id="d-v2" class="in" type="text" inputmode="decimal" value="100">
+        <select id="d-v2u" class="sel"></select>
+      </div>
+
+      <button class="btn primary" id="d-calc">计算</button>
+    </div>
+    <div id="d-batch" class="batch"></div>
+    <div id="d-out"></div>
+  </section>
+
+  <!-- ══ 历史 ══ -->
+  <section class="view" id="view-history" hidden>
+    <div class="cardhead pad">
+      <span class="headacts">
+        <button class="btn tiny" id="h-tags-btn" aria-expanded="false"
+                aria-controls="h-drawer">标签</button>
+        <span class="lbl" id="h-count"></span>
+        <button class="btn tiny" id="h-clear-filter" hidden>显示全部</button>
+      </span>
+      <span class="headacts">
+        <button class="btn tiny" id="h-export">CSV</button>
+        <button class="btn tiny" id="h-export-json">JSON</button>
+        <button class="btn tiny danger" id="h-clear">清空</button>
+      </span>
+    </div>
+    <div id="h-list"></div>
+  </section>
+
+  <!-- ══ 历史标签侧栏（从左侧滑出，可收回）══ -->
+  <div class="scrim" id="h-scrim" hidden></div>
+  <aside class="drawer" id="h-drawer" hidden aria-label="标签">
+    <div class="drawer-head">
+      <span class="lbl">标签</span>
+      <button class="drawer-x" id="h-drawer-x" aria-label="收起标签栏">×</button>
+    </div>
+    <div class="drawer-body" id="h-taglist"></div>
+    <div class="drawer-foot">
+      <button class="btn tiny" id="h-tag-new">＋ 新建标签</button>
+    </div>
+  </aside>
+
+  <!-- ══ 设置 ══ -->
+  <section class="view" id="view-settings" hidden>
+    <div class="card">
+      <div class="lbl">外观</div>
+      <div class="seg" id="set-theme">
+        <button data-v="auto">跟随系统</button>
+        <button data-v="light">浅色</button>
+        <button data-v="dark">深色</button>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="lbl">数值精度</div>
+      <div class="seg" id="set-sig">
+        <button data-v="2">2 位有效数字</button>
+        <button data-v="3">3 位</button>
+        <button data-v="4">4 位</button>
+      </div>
+      <p class="hint">pH 固定保留 2 位小数；质量按称量精度显示</p>
+    </div>
+
+    <div class="card">
+      <div class="lbl">默认单位</div>
+      <div class="row2">
+        <div>
+          <label class="lbl sm" for="set-defvol">体积</label>
+          <div class="inrow">
+            <input id="set-defvol" class="in" type="text" inputmode="decimal">
+            <select id="set-defvolu" class="sel"></select>
+          </div>
+        </div>
+        <div>
+          <label class="lbl sm" for="set-defconc">浓度</label>
+          <div class="inrow">
+            <input id="set-defconc" class="in" type="text" inputmode="decimal">
+            <select id="set-defconcu" class="sel"></select>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="lbl">联网查询分子量</div>
+      <label class="switch">
+        <input type="checkbox" id="set-online" checked>
+        <span>启用（查不到的化合物会去公开数据库查）</span>
+      </label>
+      <p class="hint">常用试剂已内置，不联网也能用。联网时优先 NCI Cactus。</p>
+      <label class="lbl sm" for="set-caskey">CAS Common Chemistry API Key（可选）</label>
+      <input id="set-caskey" class="in" type="text" autocomplete="off" placeholder="留空即可">
+    </div>
+
+    <div class="card">
+      <div class="lbl">中文名识别（AI）</div>
+      <p class="hint">内置库和对照表都不认识的中文名，可以交给 AI 认一下。
+        <b>AI 只负责说「这个名字英文叫什么」</b>，分子量仍然去公开数据库查 ——
+        所以它认错了会显示「查不到」，不会算错称量。</p>
+      <label class="switch">
+        <input type="checkbox" id="set-ai">
+        <span>启用</span>
+      </label>
+      <div id="set-ai-body">
+        <label class="lbl sm" for="set-ai-provider">服务商</label>
+        <select id="set-ai-provider" class="sel"></select>
+        <div id="set-ai-url-row" hidden>
+          <label class="lbl sm" for="set-ai-url">接口地址</label>
+          <input id="set-ai-url" class="in" type="text" autocomplete="off" spellcheck="false">
+        </div>
+        <label class="lbl sm" for="set-ai-key">API Key</label>
+        <input id="set-ai-key" class="in" type="password" autocomplete="off"
+               spellcheck="false" placeholder="sk-…">
+        <label class="lbl sm" for="set-ai-model">模型</label>
+        <input id="set-ai-model" class="in" type="text" autocomplete="off" spellcheck="false">
+        <p class="hint" id="set-ai-hint"></p>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="lbl">我的试剂表</div>
+      <p class="hint">导入你自己的试剂清单，常用试剂不联网就能查到，
+        结果里也会显示它在哪个位置。数据只存在这台设备上。</p>
+      <!-- 状态行 + 动作按钮：已导入时显示条数和「重新导入 / 清空」，由 app.js 填 -->
+      <div id="inv-status"></div>
+      <!-- 粘贴区 / 预览区：同一个容器，两种状态由 app.js 切换 -->
+      <div id="inv-ui"></div>
+      <details class="quiet" id="inv-fmt">
+        <summary>格式要求</summary>
+        <div class="hint">
+          <p><b>从 Excel 选中区域复制，直接粘贴</b>最省事；也可以上传 CSV 文件。
+             第一行写列名，之后每行一个试剂。</p>
+          <p>认得出的列名：
+            <b>中文名</b>（或中文名称/名称）·
+            <b>英文名</b>（或英文名称/English Name）·
+            <b>分子量</b>（或分子量(g/mol)/MW）·
+            <b>CAS</b>（或 CAS 号）·
+            <b>位置</b>（或位置编号/编号/货位）·
+            <b>分组</b>（或货架/柜子，可留空）·
+            <b>分子式</b> ·
+            <b>品牌</b>（或厂家）·
+            <b>溶剂</b> ·
+            <b>备注</b>
+          </p>
+          <p>中文名和英文名<b>至少给一个</b>；没有分子量的行也能导入，
+             只是那种试剂查得到位置、算不了称量。</p>
+          <p>没有列名时，按下而这个顺序读：
+            中文名、英文名、分子量、CAS、位置、分组、分子式、品牌、溶剂、备注。</p>
+        </div>
+      </details>
+    </div>
+
+    <div class="card">
+      <div class="cardhead">
+        <span class="lbl">分子量缓存</span>
+        <button class="btn tiny danger" id="set-clear-cache">清空缓存</button>
+      </div>
+      <div id="set-cache-list"></div>
+    </div>
+
+    <div class="card">
+      <button class="btn danger wide" id="set-clear-all">清除所有数据</button>
+      <p class="hint">会删除历史记录、缓存和设置，不可撤销</p>
+    </div>
+
+    <p class="disclaim">分子量为理论值，请以试剂瓶标签为准。</p>
+    <p class="disclaim build" id="set-build"></p>
+  </section>
+
+</main>
+
+<nav class="tabbar" role="tablist">
+  <button class="tabbtn on" data-view="home" role="tab" aria-selected="true">
+    <span class="tbicon" aria-hidden="true">⌂</span><span>首页</span>
+  </button>
+  <button class="tabbtn" data-view="history" role="tab" aria-selected="false">
+    <span class="tbicon" aria-hidden="true">☰</span><span>历史</span>
+  </button>
+  <button class="tabbtn" data-view="settings" role="tab" aria-selected="false">
+    <span class="tbicon" aria-hidden="true">⚙</span><span>设置</span>
+  </button>
+</nav>
+
+<div class="toast" id="toast" role="status" aria-live="polite" hidden></div>
+
+<script src="js/data-reagents.js"></script>
+<script src="js/data-buffers.js"></script>
+<script src="js/data-zh.js"></script>
+<!-- public:strip-start 内置库存数据，含实验室真实货架信息，公开版必须没有。
+     它必须先于 inventory.js 加载 —— 那个加载器读的就是 global.InventoryData。
+     make-dist.js --public 会把这两个标记之间整段删掉，所以别在标记外面引用它。 -->
+<script src="js/inventory-data.js"></script>
+<!-- public:strip-end -->
+<!-- 试剂位置表：合并「内置数据」和「用户导入」，两种版本都有 -->
+<script src="js/inventory.js"></script>
+<!-- 用户表格的解析器：纯函数无 DOM，单独一个文件是为了能直接被 verify.js 单测 -->
+<script src="js/inventory-import.js"></script>
+<script src="js/units.js"></script>
+<script src="js/calc.js"></script>
+<script src="js/store.js"></script>
+<script src="js/lookup.js"></script>
+<script src="js/ui.js"></script>
+<script src="js/app.js"></script>
+</body>
+</html>

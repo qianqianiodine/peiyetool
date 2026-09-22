@@ -1,0 +1,842 @@
+/* 配液计算器 —— 样式
+ * 规范见 .claude/skills/ui-core/SKILL.md
+ * dials: variance 3 / motion 1 / density 9（工具型、低动效、高密度）
+ * 间距只用 4 的倍数；颜色统一 oklch；只动 transform 与 opacity。
+ */
+
+:root {
+  /* 间距 —— 8pt 栅格 */
+  --sp1: 4px;  --sp2: 8px;  --sp3: 12px; --sp4: 16px;
+  --sp5: 20px; --sp6: 24px; --sp8: 32px; --sp10: 40px; --sp12: 48px;
+
+  /* 圆角 —— 一套 token，嵌套时内 < 外 */
+  --r1: 8px; --r2: 12px; --r3: 20px; --rpill: 9999px;
+
+  /* 字号 —— 中文界面，正文 15px 起（比英文大一档） */
+  --fs-xs: 12px; --fs-sm: 13px; --fs-md: 15px; --fs-lg: 17px;
+  --fs-xl: 21px; --fs-2xl: 26px;
+  --fs-big: clamp(30px, 9.5vw, 40px);   /* 结果大数字，全站唯一极端尺寸 */
+
+  /* 动效 —— 工具型应用，短且克制 */
+  --dur: 140ms;
+  --ease: cubic-bezier(.23, 1, .32, 1);
+
+  /* 层级刻度，禁止随意 z-index */
+  --z-tabbar: 10; --z-scrim: 20; --z-drawer: 21; --z-toast: 40;
+}
+
+/* ── 浅色 ─────────────────────────────────────────────── */
+:root, [data-theme="light"] {
+  --bg:        oklch(98.5% 0.004 240);
+  --surface:   oklch(100% 0 0);
+  --surface-2: oklch(96.5% 0.006 240);
+  --border:    oklch(90% 0.008 240);
+  --border-2:  oklch(84% 0.010 240);
+
+  --text:      oklch(22% 0.015 240);   /* 白底 ~14:1 */
+  --text-2:    oklch(45% 0.012 240);   /* 白底 ~6.5:1 */
+  --text-3:    oklch(54% 0.010 240);   /* 白底 ~4.6:1，辅助文字下限 */
+
+  --primary:    oklch(48% 0.13 235);
+  --primary-fg: oklch(99% 0 0);
+  --primary-bg: oklch(96% 0.025 235);
+  --ring:       oklch(48% 0.13 235 / .45);
+
+  --ok:     oklch(46% 0.11 155);
+  --ok-bg:  oklch(96% 0.03 155);
+  --warn:   oklch(48% 0.11 70);
+  --warn-bg:oklch(96% 0.04 80);
+  --danger: oklch(50% 0.18 25);
+  --danger-bg: oklch(96% 0.03 25);
+
+  --shadow-sm: 0 1px 2px oklch(0% 0 0 / .04), 0 1px 3px oklch(0% 0 0 / .05);
+  --shadow-md: 0 4px 12px oklch(0% 0 0 / .06), 0 2px 4px oklch(0% 0 0 / .04);
+}
+
+/* ── 深色 —— 不是反色：层间差更小，主色提亮后配深字 ──────── */
+[data-theme="dark"] {
+  --bg:        oklch(17% 0.008 240);
+  --surface:   oklch(21% 0.010 240);
+  --surface-2: oklch(25% 0.011 240);
+  --border:    oklch(31% 0.012 240);
+  --border-2:  oklch(38% 0.014 240);
+
+  --text:      oklch(93% 0.005 240);
+  --text-2:    oklch(73% 0.010 240);
+  --text-3:    oklch(62% 0.010 240);
+
+  --primary:    oklch(64% 0.12 235);
+  --primary-fg: oklch(17% 0.010 240);
+  --primary-bg: oklch(28% 0.030 235);
+  --ring:       oklch(64% 0.12 235 / .55);
+
+  --ok:     oklch(70% 0.11 155);
+  --ok-bg:  oklch(27% 0.030 155);
+  --warn:   oklch(74% 0.11 75);
+  --warn-bg:oklch(28% 0.035 75);
+  --danger: oklch(68% 0.16 25);
+  --danger-bg: oklch(28% 0.035 25);
+
+  /* 深色下阴影几乎不可见，改用边框承担容器 —— 阴影与边框不同时用 */
+  --shadow-sm: 0 1px 2px oklch(0% 0 0 / .30);
+  --shadow-md: 0 4px 14px oklch(0% 0 0 / .40);
+}
+
+/* ── 基础 ─────────────────────────────────────────────── */
+* { box-sizing: border-box; }
+
+html { -webkit-text-size-adjust: 100%; }
+
+body {
+  margin: 0;
+  min-height: 100dvh;               /* 不用 100vh：iOS 地址栏会撕裂它 */
+  padding-bottom: calc(60px + env(safe-area-inset-bottom));
+  background: var(--bg);
+  color: var(--text);
+  font: var(--fs-md)/1.55 -apple-system, BlinkMacSystemFont, "PingFang SC",
+        "Hiragino Sans GB", "Microsoft YaHei", "Segoe UI", sans-serif;
+  font-variant-numeric: tabular-nums;   /* 读数对齐是这工具的本职 */
+  -webkit-font-smoothing: antialiased;
+}
+
+:focus-visible {
+  outline: 2px solid var(--primary);
+  outline-offset: 2px;
+  border-radius: var(--r1);
+}
+
+/* ── 顶栏 ─────────────────────────────────────────────── */
+.topbar {
+  display: flex;
+  align-items: center;
+  gap: var(--sp2);
+  padding: var(--sp4) var(--sp4) var(--sp2);
+  max-width: 640px;
+  margin: 0 auto;
+}
+.topbar h1 {
+  margin: 0;
+  font-size: var(--fs-xl);
+  font-weight: 600;
+  letter-spacing: -.01em;
+  text-wrap: balance;
+}
+.back {
+  border: 0; background: none; color: var(--primary);
+  font-size: 28px; line-height: 1; padding: 0 var(--sp1);
+  width: 44px; height: 44px; margin-left: -12px;
+  cursor: pointer; flex: none;
+}
+
+main {
+  max-width: 640px;
+  margin: 0 auto;
+  padding: 0 var(--sp4) var(--sp8);
+}
+
+/* ── 底部导航 ─────────────────────────────────────────── */
+.tabbar {
+  position: fixed;
+  left: 0; right: 0; bottom: 0;
+  z-index: var(--z-tabbar);
+  display: flex;
+  background: var(--surface);
+  border-top: 1px solid var(--border);
+  padding-bottom: env(safe-area-inset-bottom);
+}
+.tabbtn {
+  flex: 1;
+  min-height: 56px;                  /* > 44px 触控下限 */
+  display: flex; flex-direction: column;
+  align-items: center; justify-content: center;
+  gap: 2px;
+  border: 0; background: none; cursor: pointer;
+  color: var(--text-3);
+  font-size: var(--fs-xs);
+  font-family: inherit;
+  transition: color var(--dur) var(--ease);
+}
+.tbicon { font-size: 18px; line-height: 1; }
+.tabbtn.on { color: var(--primary); font-weight: 600; }
+
+/* ── 卡片 ─────────────────────────────────────────────── */
+.card {
+  background: var(--surface);
+  border-radius: var(--r3);
+  padding: var(--sp5);
+  margin-bottom: var(--sp4);
+  box-shadow: var(--shadow-sm);      /* 阴影与边框二选一 */
+}
+[data-theme="dark"] .card { box-shadow: none; border: 1px solid var(--border); }
+.card.quiet { background: var(--surface-2); box-shadow: none; }
+.cardhead {
+  display: flex; align-items: center; justify-content: space-between;
+  gap: var(--sp3); margin-bottom: var(--sp3);
+}
+.cardhead.pad { padding: var(--sp2) var(--sp1); }
+.headacts { display: flex; gap: var(--sp2); }
+
+/* ── 表单 ─────────────────────────────────────────────── */
+.lbl {
+  display: block;
+  font-size: var(--fs-sm);
+  font-weight: 500;
+  color: var(--text-2);
+  margin-bottom: var(--sp2);
+}
+.lbl.sm { font-size: var(--fs-xs); }
+.card .lbl:not(:first-child) { margin-top: var(--sp4); }
+
+.in, .sel {
+  width: 100%;
+  min-height: 44px;
+  padding: var(--sp2) var(--sp3);
+  font-size: 16px;                   /* 必须 ≥16px：再小 iOS 会自动放大页面 */
+  font-family: inherit;
+  font-variant-numeric: tabular-nums;
+  color: var(--text);
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: var(--r2);
+  transition: border-color var(--dur) var(--ease);
+}
+.in::placeholder { color: var(--text-3); }
+.in:focus, .sel:focus { border-color: var(--primary); outline: none; }
+.in:focus-visible { outline: 2px solid var(--ring); outline-offset: 1px; }
+
+.sel { appearance: none; padding-right: var(--sp8);
+  background-image: linear-gradient(45deg, transparent 50%, var(--text-3) 50%),
+                    linear-gradient(135deg, var(--text-3) 50%, transparent 50%);
+  background-position: right 18px center, right 13px center;
+  background-size: 5px 5px, 5px 5px;
+  background-repeat: no-repeat;
+}
+.sel.wide { margin-bottom: var(--sp1); }
+
+.fixed {
+  padding: var(--sp2) 0 var(--sp1);
+  font-size: var(--fs-md);
+  font-weight: 600;
+  color: var(--text);
+}
+
+.inrow { display: flex; gap: var(--sp2); }
+/* 粘贴框：等宽字体让制表符对齐看得见，用户一眼能看出列有没有错位 */
+.ta { width: 100%; resize: vertical; min-height: 96px; line-height: 1.5;
+      font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+      font-size: var(--fs-sm); white-space: pre; overflow-wrap: normal; overflow-x: auto; }
+.inrow .in { flex: 1 1 auto; min-width: 0; }
+/* 单位下拉按内容自适应：最长的 mg/mL 自己撑开，短选项靠 min-width 保手感。
+   关键是 width: auto —— .sel 全局是 width: 100%，在 flex 里 flex-basis 会回退到它，
+   下拉就撑满整行、把数字输入框压成 0 宽。 */
+.inrow .sel { flex: none; width: auto; min-width: 92px; }
+
+.row2, .row3 { display: grid; gap: var(--sp3); }
+.row2 { grid-template-columns: 1fr 1fr; margin-top: var(--sp4); }
+.row3 { grid-template-columns: 1fr 1fr 1fr; }
+
+.hint {
+  margin: var(--sp2) 0 0;
+  font-size: var(--fs-xs);
+  line-height: 1.5;
+  color: var(--text-3);
+}
+
+/* ── 按钮 ─────────────────────────────────────────────── */
+.btn {
+  min-height: 44px;
+  padding: var(--sp3) var(--sp5);   /* 水平 > 垂直 */
+  font-size: var(--fs-md);
+  font-family: inherit;
+  font-weight: 600;
+  color: var(--text);
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: var(--r2);
+  cursor: pointer;
+  transition: transform var(--dur) var(--ease), background-color var(--dur) var(--ease);
+}
+.btn:active { transform: scale(.97); }
+.btn:disabled { opacity: .45; cursor: not-allowed; }
+.btn:disabled:active { transform: none; }
+
+.btn.primary {
+  background: var(--primary);
+  color: var(--primary-fg);
+  border-color: transparent;
+  width: 100%;
+  margin-top: var(--sp5);
+}
+.btn.wide { width: 100%; }
+.btn.tiny {
+  min-height: 34px;
+  padding: var(--sp1) var(--sp3);
+  font-size: var(--fs-sm);
+  font-weight: 500;
+  border-radius: var(--r1);
+}
+.btn.danger { color: var(--danger); border-color: var(--border-2); }
+.btn.primary.danger { color: var(--primary-fg); background: var(--danger); }
+
+/* ── 分段控件 ─────────────────────────────────────────── */
+.seg { display: flex; gap: var(--sp1); background: var(--surface-2);
+       padding: var(--sp1); border-radius: var(--r2); }
+.seg button {
+  flex: 1; min-height: 40px;
+  border: 0; border-radius: var(--r1);
+  background: none; color: var(--text-2);
+  font-size: var(--fs-sm); font-family: inherit; cursor: pointer;
+  transition: background-color var(--dur) var(--ease), color var(--dur) var(--ease);
+}
+.seg button.on {
+  background: var(--surface); color: var(--text); font-weight: 600;
+  box-shadow: var(--shadow-sm);
+}
+
+/* ── 子 Tab ───────────────────────────────────────────── */
+.tabs {
+  display: flex; gap: var(--sp5);
+  border-bottom: 1px solid var(--border);
+  margin-bottom: var(--sp4);
+}
+.tab {
+  border: 0; background: none; cursor: pointer;
+  padding: var(--sp3) 0;
+  font-size: var(--fs-md); font-family: inherit;
+  color: var(--text-3);
+  border-bottom: 2px solid transparent;
+  margin-bottom: -1px;
+  transition: color var(--dur) var(--ease), border-color var(--dur) var(--ease);
+}
+.tab.on { color: var(--primary); border-bottom-color: var(--primary); font-weight: 600; }
+
+/* ── 模块卡片网格 ─────────────────────────────────────── */
+.modgrid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: var(--sp3);
+  margin-top: var(--sp2);
+}
+.modcard {
+  display: flex; flex-direction: column; align-items: flex-start;
+  gap: var(--sp2);
+  padding: var(--sp5) var(--sp4);
+  min-height: 132px;
+  text-align: left;
+  background: var(--surface);
+  border: 0; border-radius: var(--r3);
+  box-shadow: var(--shadow-sm);
+  color: var(--text); font-family: inherit;
+  cursor: pointer;
+  transition: transform var(--dur) var(--ease);
+}
+[data-theme="dark"] .modcard { box-shadow: none; border: 1px solid var(--border); }
+.modcard:active { transform: scale(.975); }
+.modicon { width: 30px; height: 30px; color: var(--primary); flex: none; }
+.modname { font-size: var(--fs-lg); font-weight: 600; letter-spacing: -.01em; }
+.moddesc { font-size: var(--fs-xs); line-height: 1.45; color: var(--text-3); }
+
+/* ── 结果区 ───────────────────────────────────────────── */
+.result {
+  background: var(--surface);
+  border-radius: var(--r3);
+  padding: var(--sp5);
+  margin-bottom: var(--sp4);
+  box-shadow: var(--shadow-md);
+}
+[data-theme="dark"] .result { box-shadow: none; border: 1px solid var(--border-2); }
+
+/* 主结果：直接浮在卡片上，不加容器 —— 无容器本身是重要性的信号 */
+.result-main {
+  display: flex; align-items: baseline; gap: var(--sp2);
+  flex-wrap: wrap;
+  margin: var(--sp2) 0 var(--sp4);
+}
+.bignum {
+  font-size: var(--fs-big);
+  font-weight: 700;
+  line-height: 1;
+  letter-spacing: -.03em;
+  color: var(--primary);
+}
+.bigunit { font-size: var(--fs-lg); font-weight: 600; color: var(--text-2); }
+.result-label { font-size: var(--fs-sm); color: var(--text-2); }
+
+/* ── 货架位置（仓库里哪儿拿）─────────────────────────── */
+.where-box { margin-bottom: var(--sp4); }
+.where-box .result-label { margin-bottom: var(--sp2); }
+.where {
+  display: flex; flex-wrap: wrap; align-items: center;
+  gap: var(--sp1) var(--sp2);
+  padding: var(--sp3) 0;
+}
+.where + .where { border-top: 1px solid var(--border); }
+.where-tag {
+  flex: none; padding: var(--sp1) var(--sp2);
+  border-radius: var(--rpill);
+  font-size: var(--fs-xs); font-weight: 600;
+  background: var(--surface-2); color: var(--text-2);
+}
+.where-code {
+  flex: none;
+  font-size: var(--fs-lg); font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+.where-brand { font-size: var(--fs-xs); color: var(--text-2); }
+.where-sub { font-size: var(--fs-xs); color: var(--text-3); }
+
+/* 元信息表：键值对，不用表格语义 */
+.meta { display: grid; gap: var(--sp2); margin-bottom: var(--sp4); }
+.meta-row { display: flex; justify-content: space-between; gap: var(--sp4);
+            font-size: var(--fs-sm); }
+.meta-k { color: var(--text-3); flex: none; }
+/* anywhere 而不是 break-all：英文化合物名很长（disodium hydrogen phosphate
+   dodecahydrate），break-all 会在任意字符处断，切成「disodium hydrog / en
+   phosphate」这种读不出来的东西。anywhere 优先在空格处断，只有单个词真放不下才硬断；
+   而 CAS 号、分子式本来就没空格，两种写法效果一样 */
+.meta-v { color: var(--text); text-align: right; overflow-wrap: anywhere; }
+/* 按 CAS 查但没取到名字时占位用，别让它看起来像个正常的值 */
+.meta-none { color: var(--text-3); }
+/* AI 转写出来的名字。给个「AI」小标而不是只换颜色 —— 要能看出这个名字
+   是机器认的、需要核对，而这个信息不能只靠颜色传达 */
+.ai-pill { display: inline-block; margin-right: var(--sp2); padding: 0 var(--sp2);
+           border-radius: var(--rpill); font-size: var(--fs-xs); font-weight: 600;
+           background: var(--primary-bg); color: var(--primary); }
+
+.steps {
+  background: var(--surface-2);
+  border-radius: var(--r2);
+  padding: var(--sp3) var(--sp4);
+  font-size: var(--fs-sm);
+  line-height: 1.6;
+  color: var(--text-2);
+  margin-bottom: var(--sp4);
+}
+
+/* 数据表 */
+.tbl { width: 100%; border-collapse: collapse; font-size: var(--fs-sm); }
+.tbl th, .tbl td { padding: var(--sp3) var(--sp2); text-align: left; }
+.tbl th {
+  font-size: var(--fs-xs); font-weight: 600; color: var(--text-3);
+  border-bottom: 1px solid var(--border);
+}
+.tbl td { border-bottom: 1px solid var(--border); color: var(--text); }
+.tbl tr:last-child td { border-bottom: 0; }
+.tbl .num { text-align: right; font-variant-numeric: tabular-nums; }
+/* 四列（含母液浓度）在 375px 下要挤得下，横向内边距收窄 */
+.tbl-4 th, .tbl-4 td { padding-left: var(--sp1); padding-right: var(--sp1); }
+.tbl-4 th:first-child, .tbl-4 td:first-child { padding-left: 0; }
+.tbl-4 th:last-child,  .tbl-4 td:last-child  { padding-right: 0; }
+.tbl-wrap { overflow-x: auto; -webkit-overflow-scrolling: touch; margin: 0 calc(-1 * var(--sp5));
+            padding: 0 var(--sp5); }
+
+/* 提示条 */
+.note {
+  display: flex; gap: var(--sp2);
+  padding: var(--sp3) var(--sp4);
+  border-radius: var(--r2);
+  font-size: var(--fs-xs);
+  line-height: 1.55;
+  margin-bottom: var(--sp4);
+  background: var(--surface-2);
+  color: var(--text-2);
+}
+.note.warn  { background: var(--warn-bg);   color: var(--warn); }
+.note.ok    { background: var(--ok-bg);     color: var(--ok); }
+.note.error { background: var(--danger-bg); color: var(--danger); }
+.note b { font-weight: 600; }
+
+.acts { display: flex; gap: var(--sp2); flex-wrap: wrap; }
+
+/* ── 批量清单（快速配液 / 母液稀释）──────────────────────
+   造型跟结果卡一致。注意别给它加 overflow: hidden ——
+   标签下拉是 absolute 浮层，祖先一裁剪就整个看不见了。 */
+.batch {
+  background: var(--surface);
+  border-radius: var(--r3);
+  padding: var(--sp5);
+  margin-bottom: var(--sp4);
+  box-shadow: var(--shadow-md);
+}
+[data-theme="dark"] .batch { box-shadow: none; border: 1px solid var(--border-2); }
+.batch:empty { display: none; }
+.batch .empty { padding: var(--sp6) var(--sp2); }
+
+/* 一项 = 名称一行 + 货架位置一行 + 关键数值一行 + 结果一行。
+   货架位置在名称底下紧挨着 —— 站在货架前的读序就是「拿这个 → 它在 A-99」。 */
+.entry {
+  border: 1px solid var(--border);
+  border-radius: var(--r2);
+  padding: var(--sp3);
+  margin-bottom: var(--sp2);
+}
+.entry-top { display: flex; align-items: flex-start; gap: var(--sp1); }
+/* 名称占满整行、可换行 —— 图的就是「名字要看得全」。
+   anywhere 是防长英文名（ethylenediaminetetraacetic acid）撑破卡片 */
+.entry-name {
+  flex: 1 1 auto; min-width: 0;
+  font-size: var(--fs-md); font-weight: 600; line-height: 1.4;
+  overflow-wrap: anywhere;
+}
+.entry-zh { margin-left: var(--sp2); font-size: var(--fs-sm);
+            font-weight: 400; color: var(--text-3); }
+/* 手填分子量的标记 —— 全流程里唯一没人核对过的那个数，所以给它警告色，
+   跟货架那枚灰胶囊（.where-tag）区分开。跟着名称排在同一个文本流里，
+   上下不给内边距，免得把名称行撑高 */
+.entry-manual {
+  display: inline-block; margin-left: var(--sp2);
+  padding: 0 var(--sp2); border-radius: var(--rpill);
+  font-size: var(--fs-xs); font-weight: 600; line-height: 1.5;
+  white-space: nowrap;
+  background: var(--warn-bg); color: var(--warn);
+}
+/* 清单里的「AI 认出」：复用 .ai-pill 的配色，只把它自带的右外边距换成左外边距 ——
+   它跟在名称后面，和 .entry-zh / .entry-manual 一样要和名称拉开 8px */
+.entry-ai { margin-left: var(--sp2); margin-right: 0; }
+/* 货架位置：标签 + 编号都复用结果卡那套 .where-tag / .where-code（同一个东西长同一个样）。
+   一个化合物可能两个货位都有一瓶，所以是「标签 + 一组、再一组」。
+   组间比组内多留 8px，不然两组会连成一串读不出来。 */
+.entry-where { display: flex; flex-wrap: wrap; align-items: center;
+               gap: var(--sp1) var(--sp2); margin-top: var(--sp2); }
+.entry-where-k { flex: none; font-size: var(--fs-xs); color: var(--text-3); }
+.entry-loc { display: inline-flex; align-items: center; gap: var(--sp2); }
+.entry-loc + .entry-loc { margin-left: var(--sp2); }
+.entry-meta { margin-top: var(--sp2); font-size: var(--fs-xs); color: var(--text-3); }
+.entry-res { display: flex; align-items: baseline; gap: var(--sp2); margin-top: var(--sp2); }
+.entry-res span { flex: none; font-size: var(--fs-xs); color: var(--text-3); }
+.entry-res b {
+  font-size: var(--fs-xl); font-weight: 700; line-height: 1;
+  color: var(--primary); letter-spacing: -.02em;
+}
+
+/* 卡片右上角的「单个 / 批量」切换 */
+.cardhead .seg { flex: none; }
+.cardhead .seg button { padding: 0 var(--sp3); }   /* .seg button 默认没有横向内边距 */
+
+/* ── 体系配置：组分行（名称横跨整行，下半左模式右浓度）─────── */
+.comp {
+  display: grid;
+  grid-template-columns: minmax(0, 1.05fr) minmax(0, 1.5fr);
+  gap: var(--sp2) var(--sp3);
+  border: 1px solid var(--border);
+  border-radius: var(--r2);
+  padding: var(--sp3);
+  margin-bottom: var(--sp4);
+  background: var(--surface);
+}
+.comp-l, .comp-r { display: flex; flex-direction: column; gap: var(--sp2); min-width: 0; }
+/* 名称占满整行：左列只有 110px，减掉删除按钮剩 62px，两个汉字都放不下。
+   提出去之后行距不变 —— .comp 的 row-gap 和原来 .comp-l 内部的 gap 都是 sp2。 */
+.comp-namerow { display: flex; gap: var(--sp1); grid-column: 1 / -1; }
+.comp-namerow .in { flex: 1 1 auto; min-width: 0; }
+.comp-del {
+  flex: none; width: 44px; height: 44px;
+  border: 0; background: none; color: var(--text-3);
+  font-size: 20px; line-height: 1; cursor: pointer; border-radius: var(--r1);
+}
+.comp-del:active { background: var(--danger-bg); color: var(--danger); }
+
+/* 一行浓度：标签 | 数值 | 单位 */
+.cf {
+  display: grid;
+  /* 第三列是单位下拉（或 g/mol）：写死 60px 放不下 mg/mL，改成至少 84px、
+     有需要自己撑开 —— 同排各组分仍以 84px 对齐。 */
+  grid-template-columns: 36px minmax(0, 1fr) minmax(84px, auto);
+  align-items: center;
+  gap: var(--sp1);
+}
+.cf-lbl { font-size: var(--fs-xs); color: var(--text-3); white-space: nowrap; }
+.cf .in  { padding: var(--sp2); }
+.cf .sel { width: auto; padding-left: var(--sp2); padding-right: var(--sp6);
+           background-position: right 14px center, right 10px center; }
+.cf-suffix { font-size: var(--fs-xs); color: var(--text-3); padding-left: var(--sp2); }
+
+.seg.mini button { font-size: var(--fs-xs); }
+
+/* 同一试剂有多种形式时，横跨底部列出让用户选 */
+.comp-forms {
+  grid-column: 1 / -1;
+  display: flex; flex-wrap: wrap; align-items: center; gap: var(--sp2);
+}
+.comp-forms:empty { display: none; }
+.fchip {
+  display: inline-flex; align-items: baseline; gap: var(--sp2);
+  min-height: 44px; padding: var(--sp1) var(--sp3);
+  border: 1px solid var(--border-2); border-radius: var(--rpill);
+  background: var(--surface); color: var(--text);
+  font-family: inherit; font-size: var(--fs-sm); cursor: pointer;
+  transition: border-color var(--dur) var(--ease), background-color var(--dur) var(--ease);
+}
+.fchip b { font-size: var(--fs-xs); font-weight: 600; color: var(--text-3);
+           font-variant-numeric: tabular-nums; }
+.fchip:active { background: var(--surface-2); }
+.fchip.on { border-color: var(--primary); background: var(--primary-bg); color: var(--primary); }
+.fchip.on b { color: var(--primary); }
+
+/* ── 模块一：形式选择卡（选错形式 = 称错药，所以摆成整行大按钮）── */
+.pick-name { font-size: var(--fs-lg); font-weight: 600; }
+.pick-name span { display: block; font-size: var(--fs-sm); font-weight: 400;
+                  color: var(--text-3); margin-top: var(--sp1); }
+.forms-pick { display: flex; flex-direction: column; gap: var(--sp2);
+              margin: var(--sp3) 0; }
+.fcard {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 0 var(--sp3);
+  min-height: 56px;
+  padding: var(--sp3) var(--sp4);
+  text-align: left;
+  background: var(--surface);
+  border: 1px solid var(--border-2);
+  border-radius: var(--r2);
+  font-family: inherit; color: var(--text); cursor: pointer;
+  transition: border-color var(--dur) var(--ease), background-color var(--dur) var(--ease);
+}
+.fcard:active { background: var(--surface-2); }
+.fcard-lbl { font-size: var(--fs-md); font-weight: 600; }
+.fcard-formula { font-size: var(--fs-xs); color: var(--text-3);
+                 font-variant-numeric: tabular-nums; }
+.fcard-mw { grid-row: 1 / 3; grid-column: 2; text-align: right;
+            font-size: var(--fs-lg); font-weight: 600; font-variant-numeric: tabular-nums; }
+.fcard-mw i { font-size: var(--fs-xs); font-weight: 400; font-style: normal;
+              color: var(--text-3); margin-left: var(--sp1); }
+
+.quickgrp { margin-top: var(--sp3); }
+.quickgrp-name { font-size: var(--fs-xs); color: var(--text-3); display: block;
+                 margin-bottom: var(--sp2); }
+.chips { display: flex; flex-wrap: wrap; gap: var(--sp2); }
+.chip {
+  min-height: 36px;
+  padding: var(--sp1) var(--sp3);
+  font-size: var(--fs-sm); font-family: inherit;
+  background: var(--surface); color: var(--text);
+  border: 1px solid var(--border-2); border-radius: var(--rpill);
+  cursor: pointer;
+  transition: transform var(--dur) var(--ease);
+}
+.chip:active { transform: scale(.95); }
+
+.empty {
+  text-align: center;
+  padding: var(--sp12) var(--sp5);
+  color: var(--text-3);
+  font-size: var(--fs-sm);
+  line-height: 1.7;
+}
+.empty b { display: block; color: var(--text-2); font-size: var(--fs-md);
+           font-weight: 600; margin-bottom: var(--sp2); }
+
+/* ── 历史 ─────────────────────────────────────────────── */
+.hist {
+  background: var(--surface);
+  border-radius: var(--r2);
+  padding: var(--sp4);
+  margin-bottom: var(--sp3);
+  box-shadow: var(--shadow-sm);
+}
+[data-theme="dark"] .hist { box-shadow: none; border: 1px solid var(--border); }
+.hist-top { display: flex; justify-content: space-between; gap: var(--sp3);
+            align-items: center; margin-bottom: var(--sp2); }
+/* min-width:0 让长标题截断，而不是把右边的按钮挤出卡片 */
+.hist-head { flex: 1 1 auto; min-width: 0; }
+/* 「＋ 标签」和收藏紧挨着，两者与标题之间才用大间距 */
+.hist-topacts { flex: none; display: flex; align-items: center; gap: var(--sp1); }
+/* 历史标题可能是一长串英文化合物名，不换行会直接撑出卡片 */
+.hist-title { font-size: var(--fs-md); font-weight: 600; overflow-wrap: anywhere; }
+.hist-sub { font-size: var(--fs-xs); color: var(--text-3); }
+.hist-sum { font-size: var(--fs-md); color: var(--text-2); margin-bottom: var(--sp3);
+            font-variant-numeric: tabular-nums; }
+/* 批量记录多一个「清单 n 项」按钮，375px 下会放不下 —— 允许换行，
+   普通记录按钮少、不会触发换行，观感不变 */
+.hist-acts { display: flex; gap: var(--sp2); flex-wrap: wrap; }
+/* 卡片里就地展开的清单 —— 跟页面上那份是同一个 .entry，只是这里的外壳 .hist
+   已经是一张卡了，里面的行再各带一圈边框就成了卡片套卡片。改成发丝线分隔。 */
+.hist-list { margin-top: var(--sp3); }
+.hist-list .entry { border: 0; border-radius: 0; padding: 0; margin: 0; }
+.hist-list .entry + .entry {
+  border-top: 1px solid var(--border);
+  margin-top: var(--sp4);
+  padding-top: var(--sp4);
+}
+
+/* ── 历史小标签 ────────────────────────────────────────── */
+.hist-tags { display: flex; flex-wrap: wrap; align-items: center;
+             gap: var(--sp2); margin-bottom: var(--sp3); }
+.tchip {
+  display: inline-flex; align-items: center; gap: var(--sp1);
+  min-height: 32px; padding: 0 var(--sp2) 0 var(--sp3);
+  font-size: var(--fs-xs); font-family: inherit;
+  background: var(--surface-2); color: var(--text-2);
+  border: 1px solid transparent; border-radius: var(--rpill);
+  cursor: pointer;
+}
+.tchip.on { background: var(--primary-bg); color: var(--primary);
+            border-color: var(--primary); }
+.tchip .tx { font-size: 15px; line-height: 1; color: var(--text-3); padding: 0 2px; }
+.tchip.on .tx { color: var(--primary); }
+.tchip-add {
+  flex: none; white-space: nowrap;
+  min-height: 32px; padding: 0 var(--sp3);
+  font-size: var(--fs-xs); font-family: inherit;
+  background: none; color: var(--text-3);
+  border: 1px dashed var(--border-2); border-radius: var(--rpill);
+  cursor: pointer;
+}
+.tchip-add:active { background: var(--surface-2); }
+.tchip-add[aria-expanded="true"] {
+  background: var(--primary-bg); color: var(--primary); border-color: var(--primary);
+}
+
+/* 打标签的下拉列表 */
+.tmenu {
+  position: relative; z-index: 5;
+  margin: calc(-1 * var(--sp2)) 0 var(--sp3);
+  background: var(--surface);
+  border: 1px solid var(--border-2);
+  border-radius: var(--r2);
+  box-shadow: var(--shadow-md);
+  overflow: hidden;
+}
+.tmenu-item {
+  display: flex; align-items: center; gap: var(--sp2);
+  width: 100%; min-height: 44px; padding: 0 var(--sp4);
+  background: none; border: 0; cursor: pointer;
+  font-family: inherit; font-size: var(--fs-md); color: var(--text);
+  text-align: left;
+}
+.tmenu-item + .tmenu-item { border-top: 1px solid var(--border); }
+.tmenu-item:active { background: var(--surface-2); }
+.tmenu-item .ck { width: 18px; flex: none; color: var(--primary); font-size: 15px; }
+.tmenu-item .nm { flex: 1 1 auto; min-width: 0; overflow: hidden;
+                  text-overflow: ellipsis; white-space: nowrap; }
+.tmenu-item .ct { flex: none; font-size: var(--fs-xs); color: var(--text-3);
+                  font-variant-numeric: tabular-nums; }
+.tmenu-item.new { color: var(--primary); }
+.tmenu-empty { padding: var(--sp3) var(--sp4); font-size: var(--fs-xs);
+               color: var(--text-3); }
+.tmenu-new { display: flex; gap: var(--sp2); padding: var(--sp2); }
+.tmenu-new .in { flex: 1 1 auto; min-width: 0; }
+
+/* 结果区头部的标签入口（快速配液 / 体系配置）—— chip 复用上面的 .hist-tags，
+   下拉做成浮层：飘在内容上方，不把结果区撑高、不推走下面的读数 */
+.result-head { display: flex; align-items: center; justify-content: space-between;
+               gap: var(--sp3); }
+.tagbox { position: relative; flex: none; max-width: 70%; }
+.tagbox:empty { display: none; }
+.tagbox .hist-tags { margin-bottom: 0; }
+.tmenu.pop {
+  position: absolute; top: calc(100% + var(--sp2)); right: 0; z-index: 6;
+  margin: 0; min-width: 200px; max-width: 76vw; max-height: 55vh;
+  overflow-y: auto;
+}
+
+/* ── 侧栏（历史标签）──────────────────────────────────── */
+.scrim {
+  position: fixed; inset: 0;
+  background: oklch(0% 0 0 / .5);
+  z-index: var(--z-scrim);
+}
+.scrim[hidden] { display: none; }
+.drawer {
+  position: fixed; top: 0; bottom: 0; left: 0;
+  width: min(78vw, 300px);
+  display: flex; flex-direction: column;
+  background: var(--surface);
+  border-right: 1px solid var(--border);
+  z-index: var(--z-drawer);
+  transform: translateX(-100%);
+  transition: transform 220ms var(--ease);
+  padding-top: env(safe-area-inset-top);
+}
+.drawer[hidden] { display: none; }
+.drawer.open { transform: translateX(0); }
+.drawer-head {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: var(--sp3) var(--sp2) var(--sp3) var(--sp4);
+  border-bottom: 1px solid var(--border);
+}
+.drawer-x {
+  width: 44px; height: 44px; flex: none;
+  border: 0; background: none; color: var(--text-3);
+  font-size: 20px; line-height: 1; cursor: pointer; border-radius: var(--r1);
+}
+.drawer-x:active { background: var(--surface-2); }
+.drawer-body { flex: 1 1 auto; overflow-y: auto; padding: var(--sp2) var(--sp2); }
+.drawer-foot { padding: var(--sp3) var(--sp4); border-top: 1px solid var(--border);
+               padding-bottom: calc(var(--sp3) + env(safe-area-inset-bottom)); }
+/* 一行 = 筛选按钮 + 计数 + 删除（button 不能套 button，所以外层是 div） */
+.tagitem {
+  display: flex; align-items: center; gap: var(--sp2);
+  border-radius: var(--r1); color: var(--text-2);
+}
+.tagitem.on { background: var(--primary-bg); color: var(--primary); }
+.tagitem .nm {
+  flex: 1 1 auto; min-width: 0; min-height: 44px;
+  padding: 0 var(--sp1) 0 var(--sp3);
+  background: none; border: 0; cursor: pointer;
+  font-family: inherit; font-size: var(--fs-md); color: inherit;
+  text-align: left; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.tagitem.on .nm { font-weight: 600; }
+.tagitem .ct { flex: none; font-size: var(--fs-xs); color: var(--text-3);
+               font-variant-numeric: tabular-nums; }
+.tagitem.on .ct { color: var(--primary); }
+.tagitem .rm {
+  flex: none; width: 40px; height: 44px;
+  border: 0; background: none; color: var(--text-3);
+  font-size: 16px; line-height: 1; cursor: pointer; border-radius: var(--r1);
+}
+.tagitem .rm:active { background: var(--danger-bg); color: var(--danger); }
+.drawer-new { display: flex; gap: var(--sp2); }
+.drawer-new .in { flex: 1 1 auto; min-width: 0; }
+.star { border: 0; background: none; cursor: pointer; font-size: 18px;
+        color: var(--text-3); padding: 0 var(--sp1); line-height: 1; }
+.star.on { color: var(--warn); }
+
+/* ── 开关 ─────────────────────────────────────────────── */
+.switch { display: flex; align-items: center; gap: var(--sp3);
+          min-height: 44px; cursor: pointer; font-size: var(--fs-sm); }
+.switch input { width: 20px; height: 20px; accent-color: var(--primary); flex: none; }
+
+.disclaim { font-size: var(--fs-xs); color: var(--text-3); text-align: center;
+            margin: var(--sp5) 0 var(--sp2); line-height: 1.6; }
+.disclaim.build { margin-top: var(--sp2); opacity: .7; }
+
+/* ── Toast ────────────────────────────────────────────── */
+.toast {
+  position: fixed;
+  left: 50%; bottom: calc(76px + env(safe-area-inset-bottom));
+  transform: translateX(-50%) translateY(8px);
+  z-index: var(--z-toast);
+  max-width: calc(100vw - 32px);
+  padding: var(--sp3) var(--sp5);
+  background: var(--text);
+  color: var(--bg);
+  font-size: var(--fs-sm);
+  border-radius: var(--rpill);
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity var(--dur) var(--ease), transform var(--dur) var(--ease);
+}
+.toast.on { opacity: 1; transform: translateX(-50%) translateY(0); }
+.toast.err { background: var(--danger); color: oklch(99% 0 0); }
+
+/* ── 响应式：移动端是基线，桌面是增强 ───────────────────── */
+@media (max-width: 360px) {
+  .row3 { grid-template-columns: 1fr 1fr; }
+  .modgrid { gap: var(--sp2); }
+}
+@media (min-width: 720px) {
+  .modgrid { grid-template-columns: repeat(4, 1fr); }
+  .modcard { min-height: 148px; }
+}
+
+/* ── 减少动效 ─────────────────────────────────────────── */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: .01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: .01ms !important;
+  }
+}
