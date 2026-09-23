@@ -679,9 +679,14 @@
         +   '<button type="button" class="comp-del" data-del aria-label="删除该组分">×</button>'
         + '</div>'
         + '<div class="comp-l">'
+        /* 「液」= 拿母液稀释，「固」= 称固体。单字是为了竖排后只占一个字的宽度，
+           把省下的给右列浓度输入（见 app.css 的 .comp-l .seg）。
+           单字脱离上下文读不出语义，用 aria-label 补回来。 */
         +   '<div class="seg mini" data-mode>'
-        +     '<button type="button" data-m="stock"' + (solid ? '' : ' class="on"') + '>母液</button>'
-        +     '<button type="button" data-m="solid"' + (solid ? ' class="on"' : '') + '>固体</button>'
+        +     '<button type="button" data-m="stock"' + (solid ? '' : ' class="on"')
+        +       ' aria-label="用母液">液</button>'
+        +     '<button type="button" data-m="solid"' + (solid ? ' class="on"' : '')
+        +       ' aria-label="用固体">固</button>'
         +   '</div>'
         + '</div>'
         + '<div class="comp-r">'

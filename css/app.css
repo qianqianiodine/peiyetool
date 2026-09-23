@@ -516,7 +516,10 @@ main {
 /* ── 体系配置：组分行（名称横跨整行，下半左模式右浓度）─────── */
 .comp {
   display: grid;
-  grid-template-columns: minmax(0, 1.05fr) minmax(0, 1.5fr);
+  /* 左列交给竖排的模式按钮自己撑（一个字宽 ≈ 52px），右列吃掉全部剩余。
+     原来按 1.05 : 1.5 分，左列拿走 41% —— 375px 下浓度输入框只剩 30 多像素，
+     四位数字就溢出了。 */
+  grid-template-columns: auto minmax(0, 1fr);
   gap: var(--sp2) var(--sp3);
   border: 1px solid var(--border);
   border-radius: var(--r2);
@@ -525,7 +528,12 @@ main {
   background: var(--surface);
 }
 .comp-l, .comp-r { display: flex; flex-direction: column; gap: var(--sp2); min-width: 0; }
-/* 名称占满整行：左列只有 110px，减掉删除按钮剩 62px，两个汉字都放不下。
+/* 模式切换竖排：「液」在上「固」在下，只占一个字的横向空间。
+   横排的「母液 / 固体」要 126px，右列浓度输入被压到放不下四位数。
+   按钮宽 = 12px 字 + 两侧 sp4 = 44px（移动端触控下限），高度沿用 .seg button 的 40px。 */
+.comp-l .seg { flex-direction: column; }
+.comp-l .seg button { padding: 0 var(--sp4); }
+/* 名称占满整行：左列只有 50 多像素，减掉删除按钮剩不到 10px，两个汉字都放不下。
    提出去之后行距不变 —— .comp 的 row-gap 和原来 .comp-l 内部的 gap 都是 sp2。 */
 .comp-namerow { display: flex; gap: var(--sp1); grid-column: 1 / -1; }
 .comp-namerow .in { flex: 1 1 auto; min-width: 0; }
