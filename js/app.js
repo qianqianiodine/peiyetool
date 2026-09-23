@@ -108,6 +108,30 @@
     return rec;
   }
 
+  /* 现在这份表单是从哪条历史记录调出来的 —— 由 recall 设置。点计算时靠它决定要不要问
+     「覆盖」：从零算的没得覆盖，不问。 */
+  let editingRec = null;
+
+  /** 这次算出来的结果写进哪条历史？返回写进去的那条 id（结果区的标签行要指向它）。
+   *  在调出来的那份表单上点计算会先问一句：答「是」更新原来那条，答「否」另存一条新的。
+   *  从零算的不进这套 —— 本来就没有「原来那条」，问了也没意义。 */
+  async function saveResult(module, title, summary, payload) {
+    const linked = editingRec && editingRec.module === module ? editingRec : null;
+    if (linked) {
+      const ok = await UI.askConfirm('确定覆盖原来那条记录？');
+      if (ok) {
+        Store.historyUpdate(linked.id, { title, summary, payload });
+        if (currentView === 'history') renderHistory();   // historyUpdate 不会自己刷
+        return linked.id;
+      }
+    }
+    const id = saveHistory(module, title, summary, payload).id;
+    // 接着编辑的是刚存下这条 —— 但只在本来就有「原来那条」时才接上，
+    // 否则从零算的第二次计算就会平白无故问一句「覆盖吗」
+    if (linked) editingRec = { module, id };
+    return id;
+  }
+
   /* ══ 模块一：快速配液 ═══════════════════════════════ */
   let quickFormLabel = null;   // 用户为本次查询选定的形式
   let quickShelfPick = null;   // 用户选定的货架位置（同名多瓶且分子量不同时）
@@ -178,8 +202,8 @@
     /* 标题用 displayName 而不是 r.name：按 CAS 查没取到名字时 r.name 是空串，
        直接传下去历史里会是一条没有标题的记录 */
     TAGBAR.quick.id = replay ? replay.id
-      : saveHistory('quick', displayName(r), U.formatMass(mass).text,
-          { query: q, conc, concUnit: 'M', vol, volUnit: 'L' }).id;
+      : await saveResult('quick', displayName(r), U.formatMass(mass).text,
+          { query: q, conc, concUnit: 'M', vol, volUnit: 'L' });
     renderQuickOk(r, conc, vol, mass);
   }
 
@@ -408,7 +432,7 @@
       runQuick();
     }));
 
-    const go2 = () => {
+    const go2 = async () => {
       const mw = U.num($('#q-manual').value);
       if (!requirePos(mw, '请输入有效的分子量')) return;
       const conc = readQty('#q-conc', '#q-concu', U.toMolar);
@@ -426,8 +450,8 @@
       }
 
       TAGBAR.quick.id = replay ? replay.id
-        : saveHistory('quick', m.name, U.formatMass(mass).text,
-            { query: q, conc, concUnit: 'M', vol, volUnit: 'L' }).id;
+        : await saveResult('quick', m.name, U.formatMass(mass).text,
+            { query: q, conc, concUnit: 'M', vol, volUnit: 'L' });
       renderQuickOk(m, conc, vol, mass);
     };
     $('#q-manual-go').addEventListener('click', go2);
@@ -435,7 +459,7 @@
   }
 
   /* ══ 模块二 · 子 Tab 1：温度换算 ════════════════════ */
-  function runTemp() {
+  async function runTemp() {
     const replay = consumeReplay('ph');
     const b = Buffers.bufferById($('#t-buf').value);
     if (!b) return;
@@ -482,7 +506,7 @@
     out.innerHTML = html;
     bindCopy(out);
     revealOut(out);
-    if (!replay) saveHistory('ph', b.name + ' 温度换算', pHtxt + ' @ ' + t2 + '°C',
+    if (!replay) await saveResult('ph', b.name + ' 温度换算', pHtxt + ' @ ' + t2 + '°C',
       { bufferId: b.id, pH, tKnown: t1, tTarget: t2 });
   }
 
@@ -522,7 +546,7 @@
       + '。超出范围仍可计算，但缓冲能力很弱。</div>';
   }
 
-  function runPoly() {
+  async function runPoly() {
     const replay = consumeReplay('poly');
     const s = Buffers.polyById($('#p-sys').value);
     if (!s) return;
@@ -622,7 +646,7 @@
     revealOut(out);
 
     if (r.inRange && !replay) {
-      saveHistory('poly', s.name + '缓冲液 ' + U.formatPH(pH),
+      await saveResult('poly', s.name + '缓冲液 ' + U.formatPH(pH),
         mA.text + ' + ' + mB.text,
         { sysId: s.id, pH, temp, conc, vol, acidForm: acidForm.label, baseForm: baseForm.label });
     }
@@ -871,7 +895,7 @@
     return { items };
   }
 
-  function runSystem() {
+  async function runSystem() {
     const vol = readQty('#s-vol', '#s-volu', U.toLiter);
     if (!requirePos(vol, '最终体积必须大于 0')) return;
     if (!comps.length) { toast('请先添加至少一个组分', 'error'); return; }
@@ -924,11 +948,12 @@
       + '</div>'
       + '</div>';
 
-    // 先存历史再渲染：结果区的标签行要指向这条记录
+    /* 先定下这条结果写进哪条历史（可能要问一句覆盖不覆盖）再渲染：
+       结果区的标签行要指向那条记录 */
     tagBarReset('system');
-    TAGBAR.system.id = saveHistory('system', items.length + ' 组分体系',
+    TAGBAR.system.id = await saveResult('system', items.length + ' 组分体系',
       '共 ' + totalTxt + ' 母液 / 补 ' + solTxt,
-      { vol, comps: JSON.parse(JSON.stringify(comps)) }).id;
+      { vol, comps: JSON.parse(JSON.stringify(comps)) });
 
     const out = $('#s-out');
     out.innerHTML = html;
@@ -985,7 +1010,7 @@
   }
 
   /* ══ 模块四：母液稀释 ═══════════════════════════════ */
-  function runDilution() {
+  async function runDilution() {
     const replay = consumeReplay('dilution');
     const c1 = U.num($('#d-c1').value), c2 = U.num($('#d-c2').value);
     const v2 = U.num($('#d-v2').value);
@@ -1053,7 +1078,7 @@
     }
 
     // 原单位跟着一起存：% / × 和 M 的换算系数不同，回放时要靠它还原成用户当初填的样子
-    if (!replay) saveHistory('dilution', (name ? name + ' ' : '') + '母液稀释',
+    if (!replay) await saveResult('dilution', (name ? name + ' ' : '') + '母液稀释',
       v1Txt + ' → ' + v2Txt, { c1: c1b, c2: c2b, v2: v2b, c1u: u1, c2u: u2, v2u: u3, name });
   }
 
@@ -1831,6 +1856,9 @@
       toast('已调出清单，可以接着往里加');
       return;
     }
+
+    // 从这条开始编辑：在它上面点计算会问要不要覆盖它（批量记录不走这套，见上）
+    editingRec = { module: item.module, id: item.id };
 
     if (item.module === 'quick') {
       $('#q-name').value = p.query || '';

@@ -427,6 +427,17 @@
 
 <div class="toast" id="toast" role="status" aria-live="polite" hidden></div>
 
+<!-- 确认框：只装一句话 + 是/否两个按钮，内容由 ui.js 的 askConfirm 填 -->
+<div class="confirm" id="confirm" hidden>
+  <div class="confirm-box" role="alertdialog" aria-modal="true" aria-labelledby="confirm-title">
+    <div class="confirm-title" id="confirm-title"></div>
+    <div class="confirm-acts">
+      <button class="btn" id="confirm-no">否</button>
+      <button class="btn primary" id="confirm-yes">是</button>
+    </div>
+  </div>
+</div>
+
 <script src="js/data-reagents.js"></script>
 <script src="js/data-buffers.js"></script>
 <script src="js/data-zh.js"></script>

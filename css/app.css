@@ -22,7 +22,7 @@
   --ease: cubic-bezier(.23, 1, .32, 1);
 
   /* 层级刻度，禁止随意 z-index */
-  --z-tabbar: 10; --z-scrim: 20; --z-drawer: 21; --z-toast: 40;
+  --z-tabbar: 10; --z-scrim: 20; --z-drawer: 21; --z-modal: 30; --z-toast: 40;
 }
 
 /* ── 浅色 ─────────────────────────────────────────────── */
@@ -829,6 +829,36 @@ main {
 }
 .toast.on { opacity: 1; transform: translateX(-50%) translateY(0); }
 .toast.err { background: var(--danger); color: oklch(99% 0 0); }
+
+/* ── 确认框 ───────────────────────────────────────────── */
+/* 只装一句话 + 是/否两个按钮（ui-core 禁止用弹层装长表单/可滚动内容）。
+   遮罩 50% 黑；「否」在左、「是」在右。 */
+.confirm {
+  position: fixed; inset: 0;
+  z-index: var(--z-modal);
+  display: flex; align-items: center; justify-content: center;
+  padding: var(--sp5);
+  background: oklch(0% 0 0 / .5);
+  opacity: 0;
+  transition: opacity var(--dur) var(--ease);
+}
+/* 上面那句 display:flex 是作者样式，会盖掉浏览器对 [hidden] 的 display:none —— 得自己写一条 */
+.confirm[hidden] { display: none; }
+.confirm.on { opacity: 1; }
+.confirm-box {
+  width: 100%; max-width: 320px;
+  padding: var(--sp5);
+  background: var(--surface);
+  border-radius: var(--r2);
+  box-shadow: var(--shadow-md);
+  transform: scale(.95);
+  transition: transform var(--dur) var(--ease);
+}
+.confirm.on .confirm-box { transform: scale(1); }
+.confirm-title { font-size: var(--fs-md); line-height: 1.6; }
+.confirm-acts { display: flex; gap: var(--sp3); margin-top: var(--sp5); }
+/* .btn.primary 自带 width:100% 和 margin-top（给设置页那种整行大按钮用的），这里还原成并排 */
+.confirm-acts .btn { flex: 1; width: auto; margin-top: 0; }
 
 /* ── 响应式：移动端是基线，桌面是增强 ───────────────────── */
 @media (max-width: 360px) {
