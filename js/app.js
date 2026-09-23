@@ -838,41 +838,47 @@
     return concLabel(it.stockConc, it.stockUnit);
   }
 
-  function runSystem() {
-    const vol = readQty('#s-vol', '#s-volu', U.toLiter);
-    if (!requirePos(vol, '最终体积必须大于 0')) return;
-    if (!comps.length) { toast('请先添加至少一个组分', 'error'); return; }
-
-    // 校验每个组分
+  /* comps（表单态）→ items（算式入参）。校验只写这一遍：结果页拿 error 去 toast，
+     历史卡里就地展开配方也走它。返回 {items} 或 {error}，自己不弹提示 —— 由调用方决定怎么说。 */
+  function compsToItems(list) {
     const items = [];
-    for (let i = 0; i < comps.length; i++) {
-      const c = comps[i];
+    for (let i = 0; i < list.length; i++) {
+      const c = list[i];
       const label = c.name || ('组分 ' + (i + 1));
       const tc = U.num(c.targetConc);
-      if (!(tc > 0)) { toast('「' + label + '」的目标浓度必须大于 0', 'error'); return; }
+      if (!(tc > 0)) return { error: '「' + label + '」的目标浓度必须大于 0' };
 
       const tKind = U.CONC[U.norm(c.targetUnit)].kind;
 
       if (c.mode === 'stock') {
         const sc = U.num(c.stockConc);
-        if (!(sc > 0)) { toast('「' + label + '」的母液浓度必须大于 0', 'error'); return; }
+        if (!(sc > 0)) return { error: '「' + label + '」的母液浓度必须大于 0' };
         // 同类时换算系数相消，% 配 % 照样对；混类（拿 % 配 M）除出来的比值没有物理意义
         if (tKind !== U.CONC[U.norm(c.stockUnit)].kind) {
-          toast('「' + label + '」的目标浓度和母液浓度得用同一类单位', 'error'); return;
+          return { error: '「' + label + '」的目标浓度和母液浓度得用同一类单位' };
         }
         items.push({ name: label, targetConc: tc, targetUnit: c.targetUnit,
                      mode: 'stock', stockConc: sc, stockUnit: c.stockUnit, mw: null });
       } else {
         const mw = U.num(c.mw);
-        if (!(mw > 0)) { toast('「' + label + '」缺少分子量，无法算固体质量', 'error'); return; }
+        if (!(mw > 0)) return { error: '「' + label + '」缺少分子量，无法算固体质量' };
         // 称固体要算「摩尔浓度 × 体积 × 分子量」，目标浓度必须是摩尔
-        if (tKind !== 'molar') {
-          toast('「' + label + '」按固体称量时，目标浓度得用摩尔单位', 'error'); return;
-        }
+        if (tKind !== 'molar') return { error: '「' + label + '」按固体称量时，目标浓度得用摩尔单位' };
         items.push({ name: label, targetConc: tc, targetUnit: c.targetUnit,
                      mode: 'solid', mw });
       }
     }
+    return { items };
+  }
+
+  function runSystem() {
+    const vol = readQty('#s-vol', '#s-volu', U.toLiter);
+    if (!requirePos(vol, '最终体积必须大于 0')) return;
+    if (!comps.length) { toast('请先添加至少一个组分', 'error'); return; }
+
+    const conv = compsToItems(comps);
+    if (conv.error) { toast(conv.error, 'error'); return; }
+    const items = conv.items;
 
     const r = Calc.systemMix(items, vol);
     const negSolvent = r.solventVol < 0;
@@ -1340,16 +1346,55 @@
    *  它不是数据，写进 payload 会被带进 JSON 导出；批量明细可能几 KB，
    *  为一个箭头的开合反复整条序列化不值。和 tagMenuFor / tagNewFor 是同一种东西。 */
   const histOpen = new Set();
+  const histRecipe = new Set();   // 哪些历史记录的「配方」是展开的
+
+  /* 历史卡里就地展开的配方 —— 跟结果区同一张表、同一个算法，只是不带标签栏和动作按钮。
+     数据从 payload.comps 现算：历史里存的是表单态、没存结果，现算才不必改数据结构，
+     所以改造之前存的老记录也展开得出来（payload 一直是 {vol, comps}）。 */
+  function recipeHtml(p) {
+    const conv = compsToItems(p.comps || []);
+    if (conv.error) {
+      return '<div class="hist-list"><div class="note error">' + esc(conv.error) + '</div></div>';
+    }
+    let r;
+    try { r = Calc.systemMix(conv.items, p.vol); }
+    catch (err) {
+      return '<div class="hist-list"><div class="note error">这份配方算不出来，点「重新调出」看看</div></div>';
+    }
+
+    const rows = r.rows.map((row, i) => {
+      const it = conv.items[i];
+      const amount = it.mode === 'stock'
+        ? U.formatVol(row.volume).text
+        : U.formatMass(row.mass).text;
+      return '<tr><td>' + esc(it.name) + '</td>'
+        + '<td class="num">' + esc(concLabel(it.targetConc, it.targetUnit)) + '</td>'
+        + '<td class="num">' + esc(it.mode === 'stock' ? stockConcText(it) : '—') + '</td>'
+        + '<td class="num">' + esc(amount) + '</td></tr>';
+    }).join('');
+
+    return '<div class="hist-list">'
+      + '<table class="tbl tbl-4"><thead><tr>'
+      + '<th>组分</th><th class="num">目标浓度</th>'
+      + '<th class="num">母液浓度</th><th class="num">取用量</th>'
+      + '</tr></thead><tbody>' + rows + '</tbody></table>'
+      + '<div class="meta" style="margin-top:16px">'
+      + row('最终体积', U.formatVol(p.vol).text)
+      + row('母液合计', U.formatVol(r.totalStockVol).text)
+      + row('补加溶剂', U.formatVol(Math.max(0, r.solventVol)).text)
+      + '</div></div>';
+  }
 
   function renderHistory() {
     const all  = Store.historyList();
     const tmap = tagMapNow();
 
-    // 记录被删掉后把展开状态一起清掉，免得这个 Set 越攒越大
-    if (histOpen.size) {
+    // 记录被删掉后把展开状态一起清掉，免得这两个 Set 越攒越大
+    if (histOpen.size || histRecipe.size) {
       const alive = {};
       all.forEach(x => { alive[x.id] = 1; });
-      Array.from(histOpen).forEach(id => { if (!alive[id]) histOpen.delete(id); });
+      [histOpen, histRecipe].forEach(set =>
+        Array.from(set).forEach(id => { if (!alive[id]) set.delete(id); }));
     }
 
     const h = histFilter ? all.filter(x => (x.tags || []).indexOf(histFilter) >= 0) : all;
@@ -1381,6 +1426,9 @@
       const isB   = isBatchRec(x);
       const nB    = isB ? x.payload.entries.length : 0;
       const openB = isB && histOpen.has(x.id);
+      // 体系配置的记录能就地看配方，不用跳回结果页；别的模块没有多组分表，不给这个按钮
+      const canR  = x.module === 'system' && !!(x.payload && x.payload.comps);
+      const openR = canR && histRecipe.has(x.id);
       // 展开的清单跟页面上那份用同一个 entryHtml：存下去的和当时看到的长得一样，
       // 货架位置、名称换行这些排版也就只有一份，不会两边慢慢漂开
       const bRows = openB
@@ -1410,19 +1458,17 @@
         +   (isB ? '<button class="btn tiny" data-hopen aria-expanded="'
                 + (openB ? 'true' : 'false') + '">清单 ' + nB + ' 项 '
                 + (openB ? '▴' : '▾') + '</button>' : '')
+        +   (canR ? '<button class="btn tiny" data-hrecipe aria-expanded="'
+                 + (openR ? 'true' : 'false') + '">配方 '
+                 + (openR ? '▴' : '▾') + '</button>' : '')
         +   '<button class="btn tiny" data-again>重新调出</button>'
         +   '<button class="btn tiny" data-rename>命名</button>'
-        // 批量记录的「复制」复制整张清单 —— 多行文本按键现取，不塞进 data-copy 属性
-        +   (isB
-              ? '<button class="btn tiny" data-hcopy>复制</button>'
-              : '<button class="btn tiny" data-copy="' + esc(x.name || x.title) + ' ' + esc(x.summary || '') + '">复制</button>')
         +   '<button class="btn tiny danger" data-del>删除</button>'
         + '</div>'
         + bRows
+        + (openR ? recipeHtml(x.payload) : '')
         + '</div>';
     }).join('');
-
-    bindCopy(box);
   }
 
   /** 打标签的下拉：列出所有标签（可勾）+ 最底下"新建"
@@ -1640,10 +1686,9 @@
       } else if (e.target.closest('[data-hopen]')) {
         if (histOpen.has(id)) histOpen.delete(id); else histOpen.add(id);
         renderHistory();
-      } else if (e.target.closest('[data-hcopy]')) {
-        // 批量记录复制整张清单，不是标题 + 摘要
-        UI.copy(batchText(item.module, item.payload.entries))
-          .then(ok => toast(ok ? '已复制清单' : '复制失败，请长按手动选择', ok ? '' : 'error'));
+      } else if (e.target.closest('[data-hrecipe]')) {
+        if (histRecipe.has(id)) histRecipe.delete(id); else histRecipe.add(id);
+        renderHistory();
 
       /* ── 标签 ── */
       } else if (e.target.closest('[data-tag-open]')) {
