@@ -225,11 +225,20 @@ main {
 .ta { width: 100%; resize: vertical; min-height: 96px; line-height: 1.5;
       font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
       font-size: var(--fs-sm); white-space: pre; overflow-wrap: normal; overflow-x: auto; }
-.inrow .in { flex: 1 1 auto; min-width: 0; }
+/* 左右内边距收到 8px（跟上下一致）：两列布局下数字框是按像素抠出来的 */
+.inrow .in { flex: 1 1 auto; min-width: 0;
+             padding-left: var(--sp2); padding-right: var(--sp2); }
 /* 单位下拉按内容自适应：最长的 mg/mL 自己撑开，短选项靠 min-width 保手感。
    关键是 width: auto —— .sel 全局是 width: 100%，在 flex 里 flex-basis 会回退到它，
    下拉就撑满整行、把数字输入框压成 0 宽。 */
-.inrow .sel { flex: none; width: auto; min-width: 92px; }
+/* min-width 从 92 收到 68：两列布局里单位下拉吃掉 92px，数字框就只剩 45px
+   （去掉左右内边距只有 21px）—— 连「1000」都写不下。
+   快速配液的下拉最长只有「mM」「mL」两个字符，92px 是白占的；
+   长选项（母液稀释的「mg/mL」）靠 width:auto 自己撑开，不受这条影响。
+   右边距和箭头跟着左移：68px 的框里再留 32px 给箭头，文字就没地方了。 */
+.inrow .sel { flex: none; width: auto; min-width: 68px;
+              padding-right: var(--sp6);
+              background-position: right 14px center, right 9px center; }
 
 .row2, .row3 { display: grid; gap: var(--sp3); }
 .row2 { grid-template-columns: 1fr 1fr; margin-top: var(--sp4); }
