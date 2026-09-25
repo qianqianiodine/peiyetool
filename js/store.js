@@ -160,7 +160,8 @@
     write(K.history, h);
   }
 
-  function historyClear() { write(K.history, []); }
+  /** 无参 = 全清；传数组 = 只留下这些（清空历史时把收藏的、带标签的传进来） */
+  function historyClear(keep) { write(K.history, keep || []); }
 
   /* ── 小标签 ──────────────────────────────────────────────
    * 历史记录可以打多个标签（h.tags 存 id 数组）。

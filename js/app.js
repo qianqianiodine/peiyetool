@@ -87,19 +87,10 @@
     el.scrollIntoView({ behavior: prefersReduced() ? 'auto' : 'smooth', block: 'start' });
   }
 
-  /* ── 历史回放：从历史"重新调出"会立刻重算一次 ──────────
-   * 那次重算要是照常记历史，每查看一次就多一条一模一样的记录。
-   * 所以调出时打个标志，由重算函数**开头**消费掉。放在开头而不是存历史时消费，
-   * 是因为中间还有"需要选形式""查询失败"这些岔路：标志留到下一次会误伤，
-   * 而"调出来 → 改参数 → 再点计算"本来就该记一条新的。 */
-  let recallReplay = null;   // { module, id }
-
-  function consumeReplay(module) {
-    if (!recallReplay || recallReplay.module !== module) return null;
-    const r = recallReplay;
-    recallReplay = null;
-    return r;
-  }
+  /* ── 历史回放 ─────────────────────────────────────────
+   * 「重新调出」只把参数填回表单，**不重算**（2026-09-25 用户要求）：
+   * 用户点计算 / 回车时才算，那次会照常存历史、并问要不要覆盖原来那条。
+   * 所以这里不需要「回放标志」—— 从历史跳过来的计算和手输的没有区别。 */
 
   /** 存一条历史记录，返回它（结果区要拿到 id 才能往上面打标签） */
   function saveHistory(module, title, summary, payload) {
@@ -148,12 +139,14 @@
   const dBatch = { on: false, entries: [], savedId: null };
   const batchOf = kind => (kind === 'quick' ? qBatch : dBatch);
 
-  async function runQuick() {
-    const replay = consumeReplay('quick');
-
+  /** fresh：这一轮是「重新开始算」（点计算、按回车、调出历史）——
+   *  上次给这个化合物选的形式 / 货架不作数，要重新摆出来问一遍。
+   *  点选项的回调不传 fresh：否则选完又弹，永远算不出结果。 */
+  async function runQuick(fresh) {
     const q = $('#q-name').value.trim();
     if (!q) { toast('请输入化合物名称或 CAS 号', 'error'); $('#q-name').focus(); return; }
-    if (q !== quickFormQuery) {
+    // 换了名字（如点了「你是不是想找」）也一样作废 —— 上次的选择是给别的化合物的
+    if (fresh || q !== quickFormQuery) {
       quickFormLabel = null; quickShelfPick = null; quickFormQuery = q;
     }
 
@@ -183,7 +176,7 @@
     if (!r.ok) {
       // 货架上几瓶分子量不同 → 摆出来让用户点，别替他挑
       if (r.reason === 'shelf-choice') { renderQuickShelfPick(r); return; }
-      renderQuickFail(q, r, replay);
+      renderQuickFail(q, r);
       return;
     }
     // 有多种形式又没指定 → 先让用户选，选错形式等于称错药
@@ -201,9 +194,8 @@
     // 回放不新增记录：标签还打在原来那条上。否则每"重新调出"一次就多一条重复的
     /* 标题用 displayName 而不是 r.name：按 CAS 查没取到名字时 r.name 是空串，
        直接传下去历史里会是一条没有标题的记录 */
-    TAGBAR.quick.id = replay ? replay.id
-      : await saveResult('quick', displayName(r), U.formatMass(mass).text,
-          { query: q, conc, concUnit: 'M', vol, volUnit: 'L' });
+    TAGBAR.quick.id = await saveResult('quick', displayName(r), U.formatMass(mass).text,
+      { query: q, conc, concUnit: 'M', vol, volUnit: 'L' });
     renderQuickOk(r, conc, vol, mass);
   }
 
@@ -368,7 +360,7 @@
       + '</span><span class="meta-v">' + v + '</span></div>';
   }
 
-  function renderQuickFail(q, r, replay) {
+  function renderQuickFail(q, r) {
     let tips = '';
     if (r.reason === 'no-mw') {
       // 货架上有，但这瓶本来就没有单一分子量 —— 说清楚原因，别让用户以为是打错名字
@@ -449,9 +441,8 @@
         return;
       }
 
-      TAGBAR.quick.id = replay ? replay.id
-        : await saveResult('quick', m.name, U.formatMass(mass).text,
-            { query: q, conc, concUnit: 'M', vol, volUnit: 'L' });
+      TAGBAR.quick.id = await saveResult('quick', m.name, U.formatMass(mass).text,
+        { query: q, conc, concUnit: 'M', vol, volUnit: 'L' });
       renderQuickOk(m, conc, vol, mass);
     };
     $('#q-manual-go').addEventListener('click', go2);
@@ -460,7 +451,6 @@
 
   /* ══ 模块二 · 子 Tab 1：温度换算 ════════════════════ */
   async function runTemp() {
-    const replay = consumeReplay('ph');
     const b = Buffers.bufferById($('#t-buf').value);
     if (!b) return;
     const pH = U.num($('#t-ph').value);
@@ -506,7 +496,7 @@
     out.innerHTML = html;
     bindCopy(out);
     revealOut(out);
-    if (!replay) await saveResult('ph', b.name + ' 温度换算', pHtxt + ' @ ' + t2 + '°C',
+    await saveResult('ph', b.name + ' 温度换算', pHtxt + ' @ ' + t2 + '°C',
       { bufferId: b.id, pH, tKnown: t1, tTarget: t2 });
   }
 
@@ -547,7 +537,6 @@
   }
 
   async function runPoly() {
-    const replay = consumeReplay('poly');
     const s = Buffers.polyById($('#p-sys').value);
     if (!s) return;
     const b = Buffers.bufferById(s.bufferId);
@@ -645,7 +634,7 @@
     bindCopy(out);
     revealOut(out);
 
-    if (r.inRange && !replay) {
+    if (r.inRange) {
       await saveResult('poly', s.name + '缓冲液 ' + U.formatPH(pH),
         mA.text + ' + ' + mB.text,
         { sysId: s.id, pH, temp, conc, vol, acidForm: acidForm.label, baseForm: baseForm.label });
@@ -1011,7 +1000,6 @@
 
   /* ══ 模块四：母液稀释 ═══════════════════════════════ */
   async function runDilution() {
-    const replay = consumeReplay('dilution');
     const c1 = U.num($('#d-c1').value), c2 = U.num($('#d-c2').value);
     const v2 = U.num($('#d-v2').value);
     const u1 = $('#d-c1u').value, u2 = $('#d-c2u').value, u3 = $('#d-v2u').value;
@@ -1078,7 +1066,7 @@
     }
 
     // 原单位跟着一起存：% / × 和 M 的换算系数不同，回放时要靠它还原成用户当初填的样子
-    if (!replay) await saveResult('dilution', (name ? name + ' ' : '') + '母液稀释',
+    await saveResult('dilution', (name ? name + ' ' : '') + '母液稀释',
       v1Txt + ' → ' + v2Txt, { c1: c1b, c2: c2b, v2: v2b, c1u: u1, c2u: u2, v2u: u3, name });
   }
 
@@ -1410,6 +1398,49 @@
       + '</div></div>';
   }
 
+  /* 其余四个模块就地展开摆什么 —— 只读 payload 里存的表单态，**不重算**：
+     重算要反查试剂形式（payload 里只存了 form 的 label 字符串），算不出来整条记录就废了；
+     而用量本来就在卡面那一行（「60.57 mg」「mA + mB」「10 mL → 100 mL」），
+     展开补的是卡面没有的那些：浓度、体积、温度、体系。
+     取不到的字段直接不显示那一行 —— 老记录的 payload 可能缺字段。 */
+  const DETAIL = {
+    quick: [
+      { k: '化合物',   v: p => p.query },
+      { k: '目标浓度', v: p => p.conc > 0 ? U.formatConc(p.conc).text : '' },
+      { k: '最终体积', v: p => p.vol > 0 ? U.formatVol(p.vol).text : '' }
+    ],
+    ph: [
+      { k: '缓冲液',   v: p => (Buffers.bufferById(p.bufferId) || {}).name },
+      { k: '已知条件', v: p => p.pH != null && p.tKnown != null
+            ? U.formatPH(p.pH) + ' @ ' + p.tKnown + ' °C' : '' },
+      { k: '目标温度', v: p => p.tTarget != null ? p.tTarget + ' °C' : '' }
+    ],
+    poly: [
+      { k: '体系',     v: p => (Buffers.polyById(p.sysId) || {}).name },
+      { k: '目标 pH',  v: p => p.pH != null && p.temp != null
+            ? U.formatPH(p.pH) + ' @ ' + p.temp + ' °C' : '' },
+      { k: '总浓度',   v: p => p.conc > 0 ? U.formatConc(p.conc).text : '' },
+      { k: '最终体积', v: p => p.vol > 0 ? U.formatVol(p.vol).text : '' },
+      { k: '酸 + 碱',  v: p => p.acidForm && p.baseForm
+            ? p.acidForm + ' + ' + p.baseForm : '' }
+    ],
+    dilution: [
+      // 浓度按记录时的原单位还原（% / × 和 M 的换算系数不同），旧记录没这字段就当 M
+      { k: '母液浓度', v: p => p.c1 > 0 ? concLabelBase(p.c1, p.c1u || 'M') : '' },
+      { k: '目标浓度', v: p => p.c2 > 0 ? concLabelBase(p.c2, p.c2u || 'M') : '' },
+      { k: '目标体积', v: p => p.v2 > 0 ? U.formatVol(p.v2).text : '' }
+    ]
+  };
+
+  function detailHtml(x) {
+    const p = x.payload || {};
+    const rows = (DETAIL[x.module] || []).map(f => {
+      const v = f.v(p);
+      return (v == null || v === 'undefined' || v === '') ? '' : row(f.k, esc(v));
+    }).join('');
+    return rows ? '<div class="hist-list"><div class="meta">' + rows + '</div></div>' : '';
+  }
+
   function renderHistory() {
     const all  = Store.historyList();
     const tmap = tagMapNow();
@@ -1451,8 +1482,11 @@
       const isB   = isBatchRec(x);
       const nB    = isB ? x.payload.entries.length : 0;
       const openB = isB && histOpen.has(x.id);
-      // 体系配置的记录能就地看配方，不用跳回结果页；别的模块没有多组分表，不给这个按钮
-      const canR  = x.module === 'system' && !!(x.payload && x.payload.comps);
+      // 就地把这条记录配了什么摆出来：体系配置是一张完整配方表（带用量），
+      // 其余模块是参数表（用量在卡面那一行）。批量记录不给这个按钮 —— 它有自己的「清单 n 项」
+      const isSys = x.module === 'system';
+      const canR  = !isB && !!x.payload
+        && (isSys ? !!x.payload.comps : !!DETAIL[x.module]);
       const openR = canR && histRecipe.has(x.id);
       // 展开的清单跟页面上那份用同一个 entryHtml：存下去的和当时看到的长得一样，
       // 货架位置、名称换行这些排版也就只有一份，不会两边慢慢漂开
@@ -1491,7 +1525,7 @@
         +   '<button class="btn tiny danger" data-del>删除</button>'
         + '</div>'
         + bRows
-        + (openR ? recipeHtml(x.payload) : '')
+        + (openR ? (isSys ? recipeHtml(x.payload) : detailHtml(x)) : '')
         + '</div>';
     }).join('');
   }
@@ -1835,16 +1869,24 @@
     toast('已建标签「' + t.name + '」');
   }
 
-  /** 把历史记录调回对应模块（参数可改）——调出后会立刻重算一次，那次不算新记录。
-   *  体系配置调出后不重算，所以它不需要这个标志（也因此 runSystem 里没有 replay 判断）。 */
+  /** 调出历史后清空结果区 —— 只填了参数、还没算，留着上一条的结果会让人以为那就是这条的 */
+  function clearRecalledOut(module) {
+    const box = { quick: '#q-out', ph: '#t-out', poly: '#p-out',
+                  dilution: '#d-out', system: '#s-out' }[module];
+    if (box) $(box).innerHTML = '';
+    // 快速配液还有一块「要你回话」的卡（选形式 / 手填分子量），上一轮的也作废
+    if (module === 'quick') { $('#q-ask').innerHTML = ''; tagBarReset('quick'); }
+    if (module === 'system') tagBarReset('system');
+  }
+
+  /** 把历史记录调回对应模块，**只填参数、不重算**（2026-09-25 用户要求）：
+   *  要算得用户自己点计算 / 回车 / 重选形式 —— 那时才会弹「确定覆盖？」。 */
   function recall(item) {
-    recallReplay = { module: item.module, id: item.id };
     const p = item.payload || {};
 
     /* 批量记录：entries 里存的就是算好的结果，不用重跑 —— 也没法重跑，
        每一项当初的浓度和体积都可能不一样。直接把清单还回去，用户接着往里加。 */
     if (isBatchRec(item)) {
-      recallReplay = null;   // 不重算。标志留着会误伤下一次单个计算（这坑踩过一次）
       const kind = item.module === 'dilution' ? 'dilution' : 'quick';
       const cfg = BATCHCFG[kind], B = batchOf(kind);
       B.entries = JSON.parse(JSON.stringify(p.entries));
@@ -1872,14 +1914,15 @@
       $('#q-volu').value = qvu;
       if (p.vol) $('#q-vol').value = U.formatVol(p.vol, { unit: qvu }).value;
       go('quick');
-      setTimeout(runQuick, 60);
+      clearRecalledOut('quick');
     } else if (item.module === 'ph') {
       $('#t-buf').value = p.bufferId || 'tris';
       if (p.pH != null) $('#t-ph').value = p.pH;
       if (p.tKnown != null) $('#t-t1').value = p.tKnown;
       if (p.tTarget != null) $('#t-t2').value = p.tTarget;
       go('ph');
-      setTimeout(() => { switchTab('temp'); runTemp(); }, 60);
+      setTimeout(() => switchTab('temp'), 60);
+      clearRecalledOut('ph');
     } else if (item.module === 'poly') {
       $('#p-sys').value = p.sysId || 'k-phosphate';
       syncPolyForms();
@@ -1890,7 +1933,8 @@
       if (p.vol != null) $('#p-vol').value = (p.vol / U.volFactor('mL')).toString();
       $('#p-volu').value = 'mL';
       go('ph');
-      setTimeout(() => { switchTab('poly'); runPoly(); }, 60);
+      setTimeout(() => switchTab('poly'), 60);
+      clearRecalledOut('poly');
     } else if (item.module === 'dilution') {
       // 按记录时的原单位还原（% / × 和 M 的换算系数不同）。
       // 旧记录没有 c1u 这些字段 —— 那时存的就是基准单位 M / mM / mL，正好当默认值。
@@ -1903,13 +1947,14 @@
       if (p.v2) $('#d-v2').value = Number(p.v2 / U.volFactor(ru3)).toString();
       $('#d-name').value = p.name || '';
       go('dilution');
-      setTimeout(runDilution, 60);
+      clearRecalledOut('dilution');
     } else if (item.module === 'system') {
       if (p.vol) $('#s-vol').value = (p.vol / U.volFactor('mL')).toString();
       $('#s-volu').value = 'mL';
       comps = (p.comps || []).map(c => Object.assign(newComp(), c, { key: 'c' + (++compSeq) }));
       renderComps();
       go('system');
+      clearRecalledOut('system');
     }
     toast('已调出，参数可修改');
   }
@@ -2221,11 +2266,16 @@
       toast('已清除所有数据');
     });
 
-    $('#h-clear').addEventListener('click', () => {
-      if (!confirm('确定清空所有历史记录吗？收藏的记录也会一并删除。')) return;
-      Store.historyClear();
+    $('#h-clear').addEventListener('click', async () => {
+      // 收藏的和带标签的是用户特意留下的，清空时跨过它们
+      const all = Store.historyList();
+      const keep = all.filter(x => x.favorite || (x.tags || []).length);
+      const n = all.length - keep.length;
+      if (!n) { toast('没有可清空的记录 —— 收藏的和带标签的都会留下'); return; }
+      if (!await UI.askConfirm('清空 ' + n + ' 条历史记录？收藏的和带标签的会保留。')) return;
+      Store.historyClear(keep);
       renderHistory();
-      toast('历史记录已清空');
+      toast('已清空 ' + n + ' 条');
     });
 
     $('#h-export').addEventListener('click', () => {
@@ -2297,8 +2347,8 @@
     syncPolyForms();
 
     // 事件绑定
-    $('#q-calc').addEventListener('click', runQuick);
-    $('#q-name').addEventListener('keydown', e => { if (e.key === 'Enter') runQuick(); });
+    $('#q-calc').addEventListener('click', () => runQuick(true));
+    $('#q-name').addEventListener('keydown', e => { if (e.key === 'Enter') runQuick(true); });
     $('#t-calc').addEventListener('click', runTemp);
     $('#p-calc').addEventListener('click', runPoly);
     $('#s-calc').addEventListener('click', runSystem);
