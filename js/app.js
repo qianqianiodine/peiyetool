@@ -195,7 +195,10 @@
     /* 标题用 displayName 而不是 r.name：按 CAS 查没取到名字时 r.name 是空串，
        直接传下去历史里会是一条没有标题的记录 */
     TAGBAR.quick.id = await saveResult('quick', displayName(r), U.formatMass(mass).text,
-      { query: q, conc, concUnit: 'M', vol, volUnit: 'L' });
+      { query: q, conc, concUnit: 'M', vol, volUnit: 'L',
+        // 展开「配方」时要能看见这瓶在哪拿。跟批量清单存成同一个形状（只留货架 + 编号）：
+        // 历史记录不是库存表，品牌/溶剂/备注这些塞进去只会让每条记录白白变胖
+        loc: (r.locations || []).map(p => ({ tag: p.tag, code: p.code })) });
     renderQuickOk(r, conc, vol, mass);
   }
 
@@ -275,6 +278,14 @@
     // 用户导入的表可能只填了位置、没填分组 —— 直接渲染空标签会出一枚空胶囊
     const tag = p.tag ? '<span class="where-tag">' + esc(p.tag) + '</span>' : '';
     return tag + '<span class="where-code">' + esc(p.code) + '</span>';
+  }
+
+  /** 一组货架位置并排渲染（历史里展开「配方」那一行用）。
+   *  .entry-loc 借的是清单那条的容器样式 —— 它只管「排成一行、两组之间留缝」；
+   *  位置本身还是 whereChip，所以结果卡 / 清单 / 展开的配方三处长得一样。 */
+  function locChips(loc) {
+    return (loc || []).map(p =>
+      '<span class="entry-loc">' + whereChip(p) + '</span>').join('');
   }
 
   /** 结果卡里的货架位置：一个货位一行，还带品牌/溶剂/备注 */
@@ -1406,6 +1417,8 @@
   const DETAIL = {
     quick: [
       { k: '化合物',   v: p => p.query },
+      // 位置紧跟名字，跟清单的读序一致：站在货架前是「拿这个 → 它在 A 柜 3 号」
+      { k: '货架位置', html: true, v: p => locChips(p.loc) },
       { k: '目标浓度', v: p => p.conc > 0 ? U.formatConc(p.conc).text : '' },
       { k: '最终体积', v: p => p.vol > 0 ? U.formatVol(p.vol).text : '' }
     ],
@@ -1436,7 +1449,9 @@
     const p = x.payload || {};
     const rows = (DETAIL[x.module] || []).map(f => {
       const v = f.v(p);
-      return (v == null || v === 'undefined' || v === '') ? '' : row(f.k, esc(v));
+      if (v == null || v === 'undefined' || v === '') return '';
+      // html 字段（如货架位置）自己转义好再交出来，这里不能再 esc 一遍
+      return row(f.k, f.html ? v : esc(v));
     }).join('');
     return rows ? '<div class="hist-list"><div class="meta">' + rows + '</div></div>' : '';
   }

@@ -406,6 +406,11 @@ main {
 .meta-v { color: var(--text); text-align: right; overflow-wrap: anywhere; }
 /* 按 CAS 查但没取到名字时占位用，别让它看起来像个正常的值 */
 .meta-none { color: var(--text-3); }
+/* 展开配方里的货架位置。这是一张紧凑的参数表，不是站在货架前要凑近看的清单，
+   所以编号回到表里那一档字号；胶囊也照 .ai-pill 的规矩只留左右内边距 ——
+   带上下内边距的话它自己就有 26px 高，整行会比邻行高出一截，光改字号也没用 */
+.meta .where-code { font-size: var(--fs-sm); }
+.meta .where-tag  { padding: 0 var(--sp2); }
 /* AI 转写出来的名字。给个「AI」小标而不是只换颜色 —— 要能看出这个名字
    是机器认的、需要核对，而这个信息不能只靠颜色传达 */
 .ai-pill { display: inline-block; margin-right: var(--sp2); padding: 0 var(--sp2);
